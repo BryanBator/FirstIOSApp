@@ -12,6 +12,7 @@ struct ContentView: View {
     
     @StateObject private var favoritesManager = FavoritesManager.shared
     @StateObject private var historyManager = HistoryManager.shared
+    @StateObject private var currencyManager = CurrencyManager.shared
     
     // Computed property für das Ergebnis
     private var convertedValue: String {
@@ -32,6 +33,14 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     categorySelectionView
+                    
+                    // Zeige Währungsstatus nur bei Währungskategorie
+                    if selectedCategory == .currency {
+                        CurrencyStatusView()
+                            .padding(.horizontal)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                    
                     inputCardView
                     swapButtonView
                     outputCardView

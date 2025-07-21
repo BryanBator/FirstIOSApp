@@ -1,10 +1,3 @@
-//
-//  UnitConverter.swift
-//  FirstIOSApp
-//
-//  Created by Bryan Bator on 21.07.25.
-//
-
 import Foundation
 
 // Enum für die Kategorien
@@ -51,8 +44,8 @@ class UnitConverter {
         case .temperature:
             return convertTemperature(value: value, from: fromUnit, to: toUnit)
         case .currency:
-            // Währung machen wir später mit API
-            return nil
+            // Währung über API
+            return CurrencyManager.shared.convert(amount: value, from: fromUnit, to: toUnit)
         }
     }
     
