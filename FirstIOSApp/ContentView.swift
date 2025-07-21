@@ -8,8 +8,10 @@ struct ContentView: View {
     @State private var showingResult = false
     @State private var showingFavorites = false
     @State private var showingAddFavorite = false
+    @State private var showingHistory = false
     
     @StateObject private var favoritesManager = FavoritesManager.shared
+    @StateObject private var historyManager = HistoryManager.shared
     
     // Computed property für das Ergebnis
     private var convertedValue: String {
@@ -46,15 +48,28 @@ struct ContentView: View {
                     Button(action: {
                         showingFavorites = true
                     }) {
-                        Label("Favoriten", systemImage: "star.fill")
-                            .foregroundColor(.primaryBlue)
+                        HStack {
+                            Image(systemName: "star.fill")
+                            Text("Favoriten")
+                        }
+                        .foregroundColor(.primaryBlue)
                     }
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
+                        print("Stern getippt! InputValue: \(inputValue)")
                         if !inputValue.isEmpty {
                             showingAddFavorite = true
+                        } else {
+                            // Toggle Favorit auch ohne Eingabe möglich
+                            let favoriteName = "\(fromUnit) → \(toUnit)"
+                            favoritesManager.toggleFavorite(
+                                category: selectedCategory,
+                                fromUnit: fromUnit,
+                                toUnit: toUnit,
+                                name: favoriteName
+                            )
                         }
                     }) {
                         Image(systemName: favoritesManager.isFavorite(
@@ -63,7 +78,9 @@ struct ContentView: View {
                             toUnit: toUnit
                         ) ? "star.fill" : "star")
                         .foregroundColor(.primaryBlue)
+                        .scaleEffect(1.2) // Größer für bessere Touch-Targets
                     }
+                    .buttonStyle(PlainButtonStyle()) // Verhindert Standard-Button-Styling
                 }
             }
         }
@@ -99,6 +116,18 @@ struct ContentView: View {
             Button("Abbrechen", role: .cancel) {}
         } message: {
             Text("Diese Umrechnung als Favorit speichern")
+        }
+        .sheet(isPresented: $showingHistory) {
+            HistoryView(isPresented: $showingHistory) { entry in
+                // Lade den ausgewählten Verlaufseintrag
+                if let category = UnitCategory.allCases.first(where: { $0.rawValue == entry.category }) {
+                    selectedCategory = category
+                    fromUnit = entry.fromUnit
+                    toUnit = entry.toUnit
+                    inputValue = entry.formattedValue
+                    showingResult = true
+                }
+            }
         }
     }
     
@@ -231,6 +260,14 @@ struct ContentView: View {
     private var actionButtonsView: some View {
         HStack(spacing: 20) {
             ActionButton(
+                title: "Verlauf",
+                icon: "clock.arrow.circlepath",
+                color: .blue
+            ) {
+                showingHistory = true
+            }
+            
+            ActionButton(
                 title: "Löschen",
                 icon: "trash",
                 color: .red
@@ -246,6 +283,18 @@ struct ContentView: View {
                 color: .green
             ) {
                 UIPasteboard.general.string = "\(convertedValue) \(toUnit)"
+                
+                // Speichere im Verlauf beim Kopieren
+                if let value = Double(inputValue),
+                   let result = Double(convertedValue) {
+                    historyManager.addEntry(
+                        value: value,
+                        result: result,
+                        fromUnit: fromUnit,
+                        toUnit: toUnit,
+                        category: selectedCategory
+                    )
+                }
             }
             .disabled(inputValue.isEmpty)
         }
