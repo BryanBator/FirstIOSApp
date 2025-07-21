@@ -6,6 +6,10 @@ struct ContentView: View {
     @State private var fromUnit = "Meter"
     @State private var toUnit = "Fuß"
     @State private var showingResult = false
+    @State private var showingFavorites = false
+    @State private var showingAddFavorite = false
+    
+    @StateObject private var favoritesManager = FavoritesManager.shared
     
     // Computed property für das Ergebnis
     private var convertedValue: String {
@@ -25,149 +29,11 @@ struct ContentView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Kategorie-Auswahl mit Icons
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Kategorie")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                        
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 15) {
-                                ForEach(UnitCategory.allCases, id: \.self) { category in
-                                    CategoryButton(
-                                        category: category,
-                                        isSelected: selectedCategory == category
-                                    ) {
-                                        withAnimation(.spring()) {
-                                            selectedCategory = category
-                                            fromUnit = category.units.first ?? ""
-                                            toUnit = category.units.last ?? ""
-                                            showingResult = false
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    }
-                    
-                    // Input Card
-                    CardView {
-                        VStack(alignment: .leading, spacing: 15) {
-                            Label("Von", systemImage: "arrow.up.circle.fill")
-                                .font(.headline)
-                                .foregroundColor(.primaryBlue)
-                            
-                            HStack(spacing: 15) {
-                                TextField("0", text: $inputValue)
-                                    .textFieldStyle(CustomTextFieldStyle())
-                                    .keyboardType(.decimalPad)
-                                    .onChange(of: inputValue) {
-                                        showingResult = !inputValue.isEmpty
-                                    }
-                                
-                                Menu {
-                                    ForEach(selectedCategory.units, id: \.self) { unit in
-                                        Button(unit) {
-                                            fromUnit = unit
-                                        }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(fromUnit)
-                                            .foregroundColor(.primary)
-                                        Image(systemName: "chevron.down")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
-                                    .background(Color(UIColor.tertiarySystemBackground))
-                                    .cornerRadius(10)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    // Tausch-Button
-                    Button(action: {
-                        withAnimation(.spring()) {
-                            let temp = fromUnit
-                            fromUnit = toUnit
-                            toUnit = temp
-                        }
-                    }) {
-                        Image(systemName: "arrow.up.arrow.down.circle.fill")
-                            .font(.largeTitle)
-                            .foregroundColor(.primaryBlue)
-                            .background(Circle().fill(Color.white).frame(width: 50, height: 50))
-                            .shadow(color: .primaryBlue.opacity(0.3), radius: 10)
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-                    
-                    // Output Card
-                    CardView {
-                        VStack(alignment: .leading, spacing: 15) {
-                            Label("Nach", systemImage: "arrow.down.circle.fill")
-                                .font(.headline)
-                                .foregroundColor(.primaryBlue)
-                            
-                            if showingResult {
-                                ResultDisplayView(value: convertedValue, unit: toUnit)
-                                    .transition(.scale.combined(with: .opacity))
-                            } else {
-                                ResultDisplayView(value: "Ergebnis", unit: toUnit)
-                                    .opacity(0.5)
-                            }
-                            
-                            Menu {
-                                ForEach(selectedCategory.units, id: \.self) { unit in
-                                    Button(unit) {
-                                        toUnit = unit
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Text("Einheit: \(toUnit)")
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.down")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding()
-                                .background(Color(UIColor.tertiarySystemBackground))
-                                .cornerRadius(10)
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    // Action Buttons
-                    HStack(spacing: 20) {
-                        ActionButton(
-                            title: "Löschen",
-                            icon: "trash",
-                            color: .red
-                        ) {
-                            inputValue = ""
-                            showingResult = false
-                        }
-                        .disabled(inputValue.isEmpty)
-                        
-                        ActionButton(
-                            title: "Kopieren",
-                            icon: "doc.on.doc",
-                            color: .green
-                        ) {
-                            UIPasteboard.general.string = "\(convertedValue) \(toUnit)"
-                        }
-                        .disabled(inputValue.isEmpty)
-                    }
-                    .padding(.horizontal)
-                    
+                    categorySelectionView
+                    inputCardView
+                    swapButtonView
+                    outputCardView
+                    actionButtonsView
                     Spacer(minLength: 50)
                 }
                 .padding(.vertical)
@@ -176,12 +42,27 @@ struct ContentView: View {
             .navigationTitle("Einheiten-Umrechner")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        showingFavorites = true
+                    }) {
+                        Label("Favoriten", systemImage: "star.fill")
+                            .foregroundColor(.primaryBlue)
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        // Hier kommt später das Einstellungs-Menü
+                        if !inputValue.isEmpty {
+                            showingAddFavorite = true
+                        }
                     }) {
-                        Image(systemName: "gear")
-                            .foregroundColor(.primaryBlue)
+                        Image(systemName: favoritesManager.isFavorite(
+                            category: selectedCategory,
+                            fromUnit: fromUnit,
+                            toUnit: toUnit
+                        ) ? "star.fill" : "star")
+                        .foregroundColor(.primaryBlue)
                     }
                 }
             }
@@ -190,6 +71,185 @@ struct ContentView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                           to: nil, from: nil, for: nil)
         }
+        .sheet(isPresented: $showingFavorites) {
+            FavoritesView(isPresented: $showingFavorites) { favorite in
+                // Lade den ausgewählten Favoriten
+                if let category = favorite.unitCategory {
+                    selectedCategory = category
+                    fromUnit = favorite.fromUnit
+                    toUnit = favorite.toUnit
+                    inputValue = ""
+                    showingResult = false
+                }
+            }
+        }
+        .alert("Favorit hinzufügen", isPresented: $showingAddFavorite) {
+            TextField("Name", text: .constant("\(fromUnit) → \(toUnit)"))
+                .disabled(true)
+            
+            Button("Hinzufügen") {
+                let favoriteName = "\(fromUnit) → \(toUnit)"
+                favoritesManager.toggleFavorite(
+                    category: selectedCategory,
+                    fromUnit: fromUnit,
+                    toUnit: toUnit,
+                    name: favoriteName
+                )
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("Diese Umrechnung als Favorit speichern")
+        }
+    }
+    
+    // MARK: - View Components
+    
+    private var categorySelectionView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Kategorie")
+                .font(.headline)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 15) {
+                    ForEach(UnitCategory.allCases, id: \.self) { category in
+                        CategoryButton(
+                            category: category,
+                            isSelected: selectedCategory == category
+                        ) {
+                            withAnimation(.spring()) {
+                                selectedCategory = category
+                                fromUnit = category.units.first ?? ""
+                                toUnit = category.units.last ?? ""
+                                showingResult = false
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+    
+    private var inputCardView: some View {
+        CardView {
+            VStack(alignment: .leading, spacing: 15) {
+                Label("Von", systemImage: "arrow.up.circle.fill")
+                    .font(.headline)
+                    .foregroundColor(.primaryBlue)
+                
+                HStack(spacing: 15) {
+                    TextField("0", text: $inputValue)
+                        .textFieldStyle(CustomTextFieldStyle())
+                        .keyboardType(.decimalPad)
+                        .onChange(of: inputValue) {
+                            showingResult = !inputValue.isEmpty
+                        }
+                    
+                    Menu {
+                        ForEach(selectedCategory.units, id: \.self) { unit in
+                            Button(unit) {
+                                fromUnit = unit
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Text(fromUnit)
+                                .foregroundColor(.primary)
+                            Image(systemName: "chevron.down")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(Color(UIColor.tertiarySystemBackground))
+                        .cornerRadius(10)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    private var swapButtonView: some View {
+        Button(action: {
+            withAnimation(.spring()) {
+                let temp = fromUnit
+                fromUnit = toUnit
+                toUnit = temp
+            }
+        }) {
+            Image(systemName: "arrow.up.arrow.down.circle.fill")
+                .font(.largeTitle)
+                .foregroundColor(.primaryBlue)
+                .background(Circle().fill(Color.white).frame(width: 50, height: 50))
+                .shadow(color: .primaryBlue.opacity(0.3), radius: 10)
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+    
+    private var outputCardView: some View {
+        CardView {
+            VStack(alignment: .leading, spacing: 15) {
+                Label("Nach", systemImage: "arrow.down.circle.fill")
+                    .font(.headline)
+                    .foregroundColor(.primaryBlue)
+                
+                if showingResult {
+                    ResultDisplayView(value: convertedValue, unit: toUnit)
+                        .transition(.scale.combined(with: .opacity))
+                } else {
+                    ResultDisplayView(value: "Ergebnis", unit: toUnit)
+                        .opacity(0.5)
+                }
+                
+                Menu {
+                    ForEach(selectedCategory.units, id: \.self) { unit in
+                        Button(unit) {
+                            toUnit = unit
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text("Einheit: \(toUnit)")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(Color(UIColor.tertiarySystemBackground))
+                    .cornerRadius(10)
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    private var actionButtonsView: some View {
+        HStack(spacing: 20) {
+            ActionButton(
+                title: "Löschen",
+                icon: "trash",
+                color: .red
+            ) {
+                inputValue = ""
+                showingResult = false
+            }
+            .disabled(inputValue.isEmpty)
+            
+            ActionButton(
+                title: "Kopieren",
+                icon: "doc.on.doc",
+                color: .green
+            ) {
+                UIPasteboard.general.string = "\(convertedValue) \(toUnit)"
+            }
+            .disabled(inputValue.isEmpty)
+        }
+        .padding(.horizontal)
     }
 }
 
